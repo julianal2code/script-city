@@ -1,17 +1,14 @@
 const axios = require('axios');
 const client = require('./configs/dbconfig');
 
-async function importCities(request, path, districtName, cities) {
+async function importCities(request, path, districtName, cities, districtsMap) {
   for (const city of cities) {
     const code = city.codigoine || city.id;
     const cityName = city.nome;
 
-    const districtQuery = 'SELECT id FROM district WHERE name = $1';
-    const districtResult = await client.query(districtQuery, [districtName]);
+    const districtId = districtsMap.get(districtName);
 
-    if (districtResult.rows.length > 0) {
-      const districtId = districtResult.rows[0].id;
-
+    if (districtId) {
       const cityQuery = 'SELECT id FROM city WHERE name = $1 AND "districtId" = $2';
       const cityResult = await client.query(cityQuery, [cityName, districtId]);
 
@@ -35,11 +32,11 @@ async function importCities(request, path, districtName, cities) {
   */
   try {
     // Importando cidades do Brasil
-    const requestBrazil = axios.create({
+    const requestBrasil = axios.create({
       baseURL: process.env.BASE_URL_BRASIL
     });
 
-    const statesBrazil = new Map([
+    const statesBrasil = new Map([
       ['Acre', 'AC'],
       ['Alagoas', 'AL'],
       ['Amapá', 'AP'],
@@ -69,10 +66,15 @@ async function importCities(request, path, districtName, cities) {
       ['Tocantins', 'TO'],
     ]);
 
-    for (const [name, abbrv] of statesBrazil.entries()) {
+    // Buscar todos os distritos do Brasil
+    const districtQueryBrasil = 'SELECT id, name FROM district WHERE "countryId" = (SELECT id FROM country WHERE name = $1)';
+    const districtResultBrasil = await client.query(districtQueryBrasil, ['Brasil']);
+    const districtsMapBrasil = new Map(districtResultBrasil.rows.map(row => [row.name, row.id]));
+
+    for (const [name, abbrv] of statesBrasil.entries()) {
       const path = `/${abbrv}/municipios`;
-      const { data: cities } = await requestBrazil.get(path);
-      await importCities(requestBrazil, path, name, cities);
+      const { data: cities } = await requestBrasil.get(path);
+      await importCities(requestBrasil, path, name, cities, districtsMapBrasil);
     }
 
     console.log('Import from Brazil cities completed successfully.');
@@ -85,10 +87,15 @@ async function importCities(request, path, districtName, cities) {
     const pathPortugal = '/distritos/municipios';
     const { data: districts } = await requestPortugal.get(pathPortugal);
 
+    // Buscar todos os distritos de Portugal
+    const districtQueryPortugal = 'SELECT id, name FROM district WHERE "countryId" = (SELECT id FROM country WHERE name = $1)';
+    const districtResultPortugal = await client.query(districtQueryPortugal, ['Portugal']);
+    const districtsMapPortugal = new Map(districtResultPortugal.rows.map(row => [row.name, row.id]));
+
     for (const district of districts) {
       const districtName = district.distrito;
       const cities = district.municipios;
-      await importCities(requestPortugal, pathPortugal, districtName, cities);
+      await importCities(requestPortugal, pathPortugal, districtName, cities, districtsMapPortugal);
     }
 
     console.log('Import from Portugal cities completed successfully.');
