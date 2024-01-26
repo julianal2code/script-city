@@ -1,4 +1,4 @@
-# Project Title
+# Script to import cities from Brazil and Portugal
 
 ## Introduction
 This is your project's README. This document should provide a brief overview of your project, how it works, and any other information that might be useful for developers or users.
